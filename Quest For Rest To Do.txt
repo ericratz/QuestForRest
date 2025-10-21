@@ -1,0 +1,4 @@
+Quest For Rest To Do List:
+
+Stats. Should be kept in player information
+Menu. Should overlay on the text area of the screen
