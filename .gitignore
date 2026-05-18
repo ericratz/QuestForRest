@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
 *.txt
-saves/
+saves/*
 .venv/
+C++/

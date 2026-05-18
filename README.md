@@ -1,13 +1,13 @@
 # Quest For Rest
 
-A text-RPG with simple graphics, rebuilt from an earlier C++ project. Built with Python and Pygame.
+A keyboard-driven RPG rebuilt from an earlier C++ text-RPG, now with simple graphics. Built with Python and Pygame.
 
 ---
 
 ## Requirements
 
-- Python 3.7+
-- Pygame
+- Python 3.10+
+- Pygame 2
 
 ```
 pip install pygame
@@ -15,7 +15,7 @@ pip install pygame
 
 ---
 
-## Running the Game
+## Running
 
 ```
 python questforrest.py
@@ -24,36 +24,25 @@ python questforrest.py
 ---
 
 ## Controls
-- Menuing: Arrow Keys
-- Select: Enter
-- Open menu: Esc
+
+| Key | Action |
+|---|---|
+| Arrow Keys | Navigate menus and options |
+| Enter | Confirm / Select |
+| ESC | Back / Open pause menu |
+| I | Open inventory (during adventure) |
 
 ---
 
-## Areas
+## Gameplay
 
-- **Village** — Starting location. Access the forest or the shop.
-- **Shop** — Buy and sell items. Stock rotates every in-game day.
-- **Forest** — Head deeper or return to the village.
-- **Cave** — The end of the current world.
+You start in a village with a 100 gold debt to the innkeeper and a single ration in your stash. Each day you can choose how to spend your time — adventure into dangerous locations, work odd jobs, trade at the shop, or rest.
+
 
 ---
 
-## Systems
-
-- Inventory & Equipment
-- Shop
-- Save System
-- Player Stats
-
-## TODO
-- Implement remaining ideas from C++ version:
-- Level up system
-- Adventuring mode
-- Monster battles
-- More areas
-- Potions
-- Status effects
+## Features
+- Adventure & combat
+- Items & Equipment
 - Quests
-- Debt system
-- Code refactor
+- Save System
