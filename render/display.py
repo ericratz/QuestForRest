@@ -8,7 +8,7 @@ Village/menu renders in render_village.py.
 
 import pygame
 import state.gamestate as gamestate
-from render.helpers import init_display, _bg, _overlay, _fonts
+from render.helpers import init_display, _bg, _overlay, _fonts, _tick_draw_fade
 import render.adventure as adventure
 import render.village as village
 
@@ -37,14 +37,12 @@ def _render_work_result(screen, wState, font, small, w, h):
 
 def _render_game(screen, wState, pState, area):
     w, h    = screen.get_size()
-    font_sz = max(int(h * 0.03), 16)
-    font    = pygame.font.SysFont("Arial", font_sz)
-    small   = pygame.font.SysFont("Arial", max(int(h * 0.025), 14))
+    font, small = _fonts(h)
 
     _bg(screen, area.image)
 
     # HUD
-    hud_h = font.get_height() + 16
+    hud_h = small.get_height() + 16
     hud = pygame.Surface((w, hud_h), pygame.SRCALPHA)
     hud.fill((0, 0, 0, 160))
     screen.blit(hud, (0, 0))
@@ -64,19 +62,24 @@ def _render_game(screen, wState, pState, area):
 
     right_parts = [f"Gold: {pState.gold}g", f"Food: {pState.food}"]
     if pState.debt > 0:
-        right_parts.append(f"Debt: {pState.debt}g")
-    right_t = small.render("   ".join(right_parts), True, (200, 200, 200))
+        days_left = 14 - (wState.day % 14) if wState.day % 14 != 0 else 14
+        debt_color_flag = days_left <= 3
+        right_parts.append(f"Debt: {pState.debt}g ({days_left}d)")
+    else:
+        debt_color_flag = False
+    debt_color = (220, 80, 80) if debt_color_flag else (200, 200, 200)
+    right_t = small.render("   ".join(right_parts), True, debt_color)
     screen.blit(right_t, (w - right_t.get_width() - 10, 8))
 
     # Bottom options
     text_pad  = 10
-    opt_row_h = font.get_height() + text_pad * 2
     opt_w     = w // 2
 
     choices   = list(area.choices.values())
     n_choices = len(choices)
     n_rows    = max(2, -(-n_choices // 2))
 
+    opt_row_h  = font.get_height() + text_pad * 2
     text_bar_h = font.get_height() + text_pad * 2
     text_bar_y = h - text_bar_h - opt_row_h * n_rows
     text_bar   = pygame.Surface((w, text_bar_h), pygame.SRCALPHA)
@@ -96,14 +99,27 @@ def _render_game(screen, wState, pState, area):
         bg.fill((100, 100, 140, 200) if sel else (20, 20, 30, 150))
         screen.blit(bg, (ox, oy))
         pygame.draw.rect(screen, (200, 200, 255) if sel else (50, 50, 70),
-                         (ox, oy, opt_w, opt_row_h), 1)
+                         pygame.Rect(ox, oy, opt_w, opt_row_h), 1)
         if has:
             _, desc = choices[i]
             t = font.render(desc, True, (255, 255, 255) if sel else (150, 150, 160))
             screen.blit(t, (ox + opt_w // 2 - t.get_width() // 2, oy + text_pad))
 
+    # Rest confirmation overlay
+    if wState.rest_confirm:
+        _overlay(screen, 200)
+        lines = ["Rest until morning?", "",
+                 "Your health will be restored to full.",
+                 "The day will advance.", "",
+                 "Enter: Rest    ESC: Cancel"]
+        cy = h // 2 - font.get_height() * len(lines) // 2
+        for line in lines:
+            t = font.render(line, True, (255, 255, 255))
+            screen.blit(t, (w // 2 - t.get_width() // 2, cy))
+            cy += font.get_height() + 10
+
     # Confirmation dialog
-    if wState.menu_confirm:
+    elif wState.menu_confirm:
         _overlay(screen, 200)
         if wState.menu_confirm == "Saved":
             lines = ["Game saved!", "", "Press any key to continue"]
@@ -127,64 +143,126 @@ def _render_game(screen, wState, pState, area):
             prefix = "> " if i == wState.menu_index else "  "
             screen.blit(font.render(prefix + item, True, color), (50, my)); my += font.get_height() + 10
 
-    if wState.work_result:
+    if wState.options_open:
+        _overlay(screen, 200)
+        cx    = w // 2
+        cy    = h // 3
+        bar_w = int(w * 0.32)
+        bar_x = cx - bar_w // 2
+
+        hdr = font.render("Options", True, (255, 255, 255))
+        screen.blit(hdr, (cx - hdr.get_width() // 2, cy))
+        cy += font.get_height() + 30
+
+        def _draw_bar(label, value, selected, y):
+            sel_col  = (255, 255, 0)   if selected else (200, 200, 200)
+            bar_col  = (100, 200, 100) if selected else (80, 140, 80)
+            filled   = int(bar_w * value)
+            pct      = round(value * 100)
+            prefix   = "> " if selected else "  "
+            lbl = font.render(prefix + label, True, sel_col)
+            screen.blit(lbl, (cx - lbl.get_width() // 2, y))
+            y += font.get_height() + 8
+            pygame.draw.rect(screen, (50, 50, 50),      pygame.Rect(bar_x,          y, bar_w, 18))
+            pygame.draw.rect(screen, bar_col,            pygame.Rect(bar_x,          y, filled, 18))
+            pygame.draw.rect(screen, (120, 120, 120),   pygame.Rect(bar_x,          y, bar_w, 18), 1)
+            if selected:
+                al = font.render("◄", True, (180, 255, 180))
+                ar = font.render("►", True, (180, 255, 180))
+                screen.blit(al, (bar_x - al.get_width() - 6, y - 1))
+                screen.blit(ar, (bar_x + bar_w + 6,          y - 1))
+            pct_t = small.render(f"{pct}%", True, sel_col)
+            screen.blit(pct_t, (cx - pct_t.get_width() // 2, y + 22))
+            return y + 48
+
+        cy = _draw_bar("Music Volume", wState.music_volume, wState.options_bar == 0, cy)
+        cy += 8
+        cy = _draw_bar("SFX Volume",   wState.sfx_volume,   wState.options_bar == 1, cy)
+        cy += 16
+
+        hint = small.render("↑ / ↓  switch    ← / →  adjust    ESC: Back", True, (130, 130, 130))
+        screen.blit(hint, (cx - hint.get_width() // 2, cy))
+
+    elif wState.work_result:
         _render_work_result(screen, wState, font, small, w, h)
+
+
+def _render_game_over(screen, wState, pState, area):
+    w, h = screen.get_size()
+    font, small = _fonts(h)
+    _bg(screen, area.image)
+    _overlay(screen, 220)
+    cx = w // 2
+    cy = h // 3
+
+    title      = "Game Over"
+    title_color = (220, 80, 80)
+    body = [
+        "You failed to pay your debt by the deadline.",
+        "The innkeeper evicts you with nothing.",
+        "",
+        "Better luck next time.",
+    ]
+
+    t = font.render(title, True, title_color)
+    screen.blit(t, (cx - t.get_width() // 2, cy))
+    cy += font.get_height() + 20
+
+    for line in body:
+        t = font.render(line, True, (220, 220, 220))
+        screen.blit(t, (cx - t.get_width() // 2, cy))
+        cy += font.get_height() + 10
+
+    cy += 20
+    hint = small.render("Press Enter to return to the main menu.", True, (130, 130, 130))
+    screen.blit(hint, (cx - hint.get_width() // 2, cy))
 
 
 # ── Master render dispatcher ──────────────────────────────────────────────────
 
-def render(screen, wState, pState, area):
-    if wState.quest_completion_popup:
+def render(screen, wState, pState, area, dt: int = 0):
+    if wState.game_over:
+        _render_game_over(screen, wState, pState, area)
+    elif wState.quest_completion_popup:
         village.render_quest_popup(screen, wState, pState, area)
-        return
-
-    if wState.name_input_mode:
+    elif wState.achievement_popup:
+        village.render_achievement_popup(screen, wState, pState, area)
+    elif wState.quest_expired_popup:
+        village.render_quest_expired_popup(screen, wState, pState, area)
+    elif wState.new_debt_popup:
+        village.render_new_debt_popup(screen, wState, pState, area)
+    elif wState.name_input_mode:
         village.render_name_input(screen, wState, area)
-        return
-
-    if wState.area == "start_screen":
+    elif wState.area == "start_screen":
         village.render_main_menu(screen, wState, area)
-        return
-
-    if wState.adventure_select_mode:
+    elif wState.adventure_select_mode:
         adventure.render_adventure_select(screen, wState, pState, area)
-        return
-
-    if wState.inventory_open:
+    elif wState.inventory_open:
         village.render_inventory(screen, wState, pState, area)
-        return
-
-    if wState.in_combat or wState.post_combat_mode:
+    elif wState.trapped_chest_mode:
+        adventure.render_trapped_chest(screen, wState, pState)
+    elif wState.in_combat or wState.post_combat_mode:
         adventure.render_combat(screen, wState, pState)
-        return
-
-    if wState.adventure_trade_mode:
+    elif wState.campfire_prompt:
+        adventure.render_campfire_prompt(screen, wState, pState)
+    elif wState.boss_warning_mode:
+        adventure.render_boss_warning(screen, wState, pState)
+    elif wState.adventure_trade_mode:
         adventure.render_adventure_trade(screen, wState, pState)
-        return
-
-    if wState.post_room_mode:
+    elif wState.post_room_mode:
         adventure.render_post_room(screen, wState, pState)
-        return
-
-    if wState.stash_open:
+    elif wState.stash_open:
         village.render_stash(screen, wState, pState, area)
-        return
-
-    if wState.questboard_open:
+    elif wState.questboard_open:
         village.render_questboard(screen, wState, pState, area)
-        return
-
-    if wState.quests_open:
+    elif wState.quests_open:
         village.render_quests(screen, wState, pState, area)
-        return
-
-    if wState.innkeeper_open:
+    elif wState.innkeeper_open:
         village.render_innkeeper(screen, wState, pState, area)
-        return
-
-    if wState.shop_mode:
+    elif wState.shop_mode:
         village.render_shop(screen, wState, pState, area)
-        return
+    else:
+        _render_game(screen, wState, pState, area)
 
-    _render_game(screen, wState, pState, area)
+    _tick_draw_fade(screen, dt)
     pygame.display.flip()

@@ -8,21 +8,26 @@ import data.items as items_module
 
 
 class Monster:
-    def __init__(self, name, tier, hp, attack, defense, xp, gold_min, gold_max, item_chance=0.25):
-        self.name        = name
-        self.tier        = tier      # 1=normal, 2=wanderer, 3=boss
-        self.max_hp      = hp
-        self.hp          = hp
-        self.attack      = attack
-        self.defense     = defense
-        self.xp          = xp
-        self.gold_min    = gold_min
-        self.gold_max    = gold_max
-        self.item_chance = item_chance
+    def __init__(self, name, tier, hp, attack, defense, xp, gold_min, gold_max,
+                 item_chance=0.25, status_effects=None):
+        self.name           = name
+        self.tier           = tier      # 1=normal, 2=wanderer, 3=boss
+        self.max_hp         = hp
+        self.hp             = hp
+        self.attack         = attack
+        self.defense        = defense
+        self.xp             = xp
+        self.gold_min       = gold_min
+        self.gold_max       = gold_max
+        self.item_chance    = item_chance
+        # list of (effect_name, chance, duration); duration -1 = permanent
+        self.status_effects = status_effects or []
 
     def copy(self):
-        return Monster(self.name, self.tier, self.max_hp, self.attack, self.defense,
-                       self.xp, self.gold_min, self.gold_max, self.item_chance)
+        m = Monster(self.name, self.tier, self.max_hp, self.attack, self.defense,
+                    self.xp, self.gold_min, self.gold_max, self.item_chance,
+                    list(self.status_effects))
+        return m
 
     def roll_loot(self):
         gold = random.randint(self.gold_min, self.gold_max)
@@ -37,19 +42,24 @@ class Monster:
 
 
 # ── Tier 1: Normal ────────────────────────────────────────────────────────────
-goblin   = Monster("Goblin",   1,  8,  3, 1,  5,  1,  5, 0.20)
-imp      = Monster("Imp",      1,  6,  4, 0,  5,  1,  3, 0.15)
+goblin   = Monster("Goblin",   1,  8,  3, 1,  5,  1,  5, 0.20,
+                   status_effects=[("weakened", 0.25, 3)])
+imp      = Monster("Imp",      1,  6,  4, 0,  5,  1,  3, 0.15,
+                   status_effects=[("poison", 0.30, 3)])
 skeleton = Monster("Skeleton", 1, 10,  2, 3,  6,  1,  5, 0.25)
 cow      = Monster("Cow",      1, 15,  1, 2,  4,  2,  8, 0.10)
 unicorn  = Monster("Unicorn",  1, 12,  3, 3,  8,  5, 10, 0.35)
 
 # ── Tier 2: Wanderers ─────────────────────────────────────────────────────────
 wanderer = Monster("Wanderer", 2, 22,  5, 3, 15,  5, 15, 0.40)
-dark_elf = Monster("Dark Elf", 2, 18,  6, 2, 15,  5, 12, 0.45)
+dark_elf = Monster("Dark Elf", 2, 18,  6, 2, 15,  5, 12, 0.45,
+                   status_effects=[("weakened", 0.30, 3)])
 
 # ── Tier 3: Bosses ────────────────────────────────────────────────────────────
-hill_giant  = Monster("Hill Giant",  3, 45,  8, 4, 50, 20, 40, 0.70)
-dark_wizard = Monster("Dark Wizard", 3, 35, 10, 2, 50, 20, 40, 0.70)
+hill_giant  = Monster("Hill Giant",  3, 45,  8, 4, 50, 20, 40, 0.70,
+                      status_effects=[("stunned", 0.20, 1)])
+dark_wizard = Monster("Dark Wizard", 3, 35, 10, 2, 50, 20, 40, 0.70,
+                      status_effects=[("poison", 0.40, 3), ("weakened", 0.30, 3)])
 
 NORMAL_POOL   = [goblin, imp, skeleton, cow, unicorn]
 WANDERER_POOL = [wanderer, dark_elf]

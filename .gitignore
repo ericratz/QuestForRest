@@ -1,6 +1,18 @@
 __pycache__/
 *.pyc
-*.txt
 saves/*
 .venv/
 C++/
+
+# Mac metadata
+__MACOSX/
+.DS_Store
+
+# AIF originals (converted to OGG)
+*.aif
+
+# Unused music files (~60MB)
+assets/music/loops_and_intros/
+assets/music/a_small_fire_will_do.wav
+assets/music/evil_temple.ogg
+assets/music/ThroughSea.ogg

@@ -43,6 +43,8 @@ def save_game(wState, pState):
             "day":                          wState.day,
             "adventure_locations_unlocked": wState.adventure_locations_unlocked,
             "adventure_locations_complete": wState.adventure_locations_complete,
+            "music_volume":                 wState.music_volume,
+            "sfx_volume":                   wState.sfx_volume,
         },
         "player": {
             "name":             pState.name,
@@ -57,9 +59,17 @@ def save_game(wState, pState):
             "debt":             pState.debt,
             "kills":            pState.kills,
             "boss_kills":       pState.boss_kills,
-            "quests_complete":   list(pState.quests_complete),
-            "quests_active":     list(pState.active_quests),
-            "quests_snapshots":  pState.quest_snapshots,
+            "kill_counts":      pState.kill_counts,
+            "quests_complete":    list(pState.quests_complete),
+            "quests_active":      list(pState.active_quests),
+            "quests_snapshots":   pState.quest_snapshots,
+            "quests_due_dates":   pState.quest_due_dates,
+            "achievements_unlocked":   list(pState.achievements_unlocked),
+            "survivalist_completions": pState.survivalist_completions,
+            "consecutive_peaceful_rooms": pState.consecutive_peaceful_rooms,
+            "total_spent_gold":        pState.total_spent_gold,
+            "temp_attack_bonus":       pState.temp_attack_bonus,
+            "status_effects":   pState.status_effects,
             "inventory":        [item.name for item in pState.inventory],
             "stash":            [item.name for item in pState.stash],
             "equipment":        {slot: (item.name if item else None)
@@ -80,6 +90,8 @@ def load_game(wState, pState, slot):
         wState.day                          = w.get("day", 1)
         wState.adventure_locations_unlocked = w.get("adventure_locations_unlocked", 1)
         wState.adventure_locations_complete = w.get("adventure_locations_complete", [])
+        wState.music_volume                 = w.get("music_volume", 0.5)
+        wState.sfx_volume                   = w.get("sfx_volume",   0.5)
         wState.area      = "village"
         wState.save_slot = slot
 
@@ -95,9 +107,17 @@ def load_game(wState, pState, slot):
         pState.debt            = p.get("debt", 100)
         pState.kills           = p.get("kills", 0)
         pState.boss_kills      = p.get("boss_kills", 0)
-        pState.quests_complete = set(p.get("quests_complete", []))
-        pState.active_quests   = set(p.get("quests_active",   ["debt"]))
-        pState.quest_snapshots = p.get("quests_snapshots",    {})
+        pState.kill_counts     = p.get("kill_counts", {})
+        pState.quests_complete  = set(p.get("quests_complete",  []))
+        pState.active_quests    = set(p.get("quests_active",    ["debt"]))
+        pState.quest_snapshots  = p.get("quests_snapshots",     {})
+        pState.quest_due_dates  = p.get("quests_due_dates",     {})
+        pState.status_effects          = p.get("status_effects",           {})
+        pState.achievements_unlocked        = set(p.get("achievements_unlocked", []))
+        pState.survivalist_completions      = p.get("survivalist_completions",       0)
+        pState.consecutive_peaceful_rooms   = p.get("consecutive_peaceful_rooms",    0)
+        pState.total_spent_gold             = p.get("total_spent_gold",              0)
+        pState.temp_attack_bonus       = p.get("temp_attack_bonus",         0)
 
         def resolve(name):
             return items_module.ALL_ITEMS.get(name)

@@ -5,6 +5,7 @@ Renders for adventure mode: location select, combat, post-room, wanderer trade
 
 import pygame
 import state.gamestate as gamestate
+import data.quests as quests_data
 from .helpers import _bg, _overlay, _fonts, _draw_hp_bar
 
 
@@ -43,12 +44,14 @@ def render_adventure_select(screen, wState, pState, area):
     desc = small.render(sel_loc["desc"], True, (170, 170, 170))
     screen.blit(desc, (cx - desc.get_width() // 2, y))
     y += small.get_height() + 8
-    room_info = small.render("10 rooms  |  Final room: Boss battle", True, (120, 120, 120))
+    n_rooms   = gamestate.ADVENTURE_LOCATIONS[wState.adventure_select_index]["total_rooms"]
+    room_info = small.render(f"{n_rooms} rooms  |  Final room: Boss battle", True, (120, 120, 120))
     screen.blit(room_info, (cx - room_info.get_width() // 2, y))
     y += small.get_height() + 18
 
-    food_color = (220, 80, 80) if pState.food < 1 else (160, 200, 140)
-    food_req = small.render(f"Requires 1 Food  (You have: {pState.food})", True, food_color)
+    food_req_n = 3 if wState.adventure_select_index >= 1 else 1
+    food_color = (220, 80, 80) if pState.food < food_req_n else (160, 200, 140)
+    food_req = small.render(f"Requires {food_req_n} Food  (You have: {pState.food})", True, food_color)
     screen.blit(food_req, (cx - food_req.get_width() // 2, y))
 
     if wState.adventure_select_msg:
@@ -58,7 +61,6 @@ def render_adventure_select(screen, wState, pState, area):
 
     hint = small.render("Enter: Start   ESC: Back", True, (130, 130, 130))
     screen.blit(hint, (cx - hint.get_width() // 2, h - hint.get_height() - 15))
-    pygame.display.flip()
 
 
 def render_combat(screen, wState, pState):
@@ -72,7 +74,7 @@ def render_combat(screen, wState, pState):
     monster = wState.combat_monster
 
     room_txt = small.render(
-        f"Room {wState.adventure_room + 1} / 10  —  "
+        f"Room {wState.adventure_room + 1} / {gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]['total_rooms']}  —  "
         f"{gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]['name']}",
         True, (180, 180, 180))
     screen.blit(room_txt, (w // 2 - room_txt.get_width() // 2, 12))
@@ -107,6 +109,19 @@ def render_combat(screen, wState, pState):
             screen.blit(t, (px, stat_y))
             stat_y += small.get_height() + 4
 
+        effect_colors = {
+            "poison":   (100, 220, 100),
+            "weakened": (220, 140, 60),
+            "stunned":  (220, 220, 80),
+            "cursed":   (180, 80, 220),
+        }
+        for eff, turns in pState.status_effects.items():
+            color   = effect_colors.get(eff, (180, 180, 180))
+            dur_str = "∞" if turns == -1 else str(turns)
+            t = small.render(f"{eff.capitalize()} ({dur_str})", True, color)
+            screen.blit(t, (px, stat_y))
+            stat_y += small.get_height() + 4
+
         # Combat log
         log_y = int(h * 0.42)
         pygame.draw.line(screen, (60, 60, 80), (40, log_y - 10), (w - 40, log_y - 10), 1)
@@ -134,7 +149,8 @@ def render_combat(screen, wState, pState):
 
             dim = ((action == "Flee" and pState.food <= 0) or
                    (action == "Use Potion" and not any(
-                       it.consumable and "heal" in it.use_effect for it in pState.inventory)))
+                       it.consumable and ("heal" in it.use_effect or "flee" in it.use_effect)
+                       for it in pState.inventory)))
             label_color = ((255, 255, 255) if sel and not dim else
                            (100, 100, 100) if dim else (150, 150, 160))
             t = font.render(action, True, label_color)
@@ -150,15 +166,24 @@ def render_combat(screen, wState, pState):
 
         if wState.combat_result == "victory":
             if wState.adventure_complete:
-                lines += ["Adventure Complete!", ""]
+                lines += ["Adventure Complete!", "",
+                          "You feel you've had enough exploring for one day",
+                          "and head back to town.",
+                          "You head home and quickly fall asleep.", ""]
             else:
                 lines += [f"{monster.name if monster else 'Enemy'} defeated!", ""]
             if gold:
                 lines.append(f"+ {gold} gold")
             if item_str:
                 lines.append(f"+ {item_str}")
-            for lvl in wState.post_combat_levelups:
+            for lvl, hp_gain, atk_gain, def_gain in wState.post_combat_levelups:
                 lines.append(f"Level Up!  Now level {lvl}!")
+                gains = []
+                if hp_gain:  gains.append(f"+{hp_gain} HP")
+                if atk_gain: gains.append(f"+{atk_gain} ATK")
+                if def_gain: gains.append(f"+{def_gain} DEF")
+                if gains:    lines.append("  " + "  ".join(gains))
+                lines.append("  Health restored to full.")
             if wState.adventure_complete:
                 hint_lines = ["[ Enter: Return to Village ]", "[ I: Open Inventory ]"]
             else:
@@ -166,8 +191,9 @@ def render_combat(screen, wState, pState):
                               "[ ESC: Retreat to Village ]"]
         elif wState.combat_result == "defeat":
             lines += ["You have been defeated.", "",
-                      "Your inventory was lost. Gold halved."]
-            hint_lines = ["[ Enter: Return to Village ]", "[ I: Open Inventory ]"]
+                      "All items are lost. Your gold is halved.",
+                      "You wake up the next day in the village."]
+            hint_lines = ["[ Enter: Wake Up ]"]
         elif wState.combat_result == "fled":
             lines += ["You fled safely."]
             hint_lines = ["[ Enter: Return to Village ]", "[ I: Open Inventory ]"]
@@ -182,7 +208,12 @@ def render_combat(screen, wState, pState):
             for qname in wState.post_combat_quest_completions:
                 qt = font.render(f"Quest Complete: {qname}!", True, (255, 215, 50))
                 screen.blit(qt, (w // 2 - qt.get_width() // 2, cy))
-                cy += font.get_height() + 8
+                cy += font.get_height() + 6
+                q = next((q for q in quests_data.QUESTS if q["name"] == qname), None)
+                if q and q["reward"] > 0:
+                    rw = small.render(f"+{q['reward']}g reward", True, (200, 180, 80))
+                    screen.blit(rw, (w // 2 - rw.get_width() // 2, cy))
+                    cy += small.get_height() + 6
 
         hint_y = h - font.get_height() * len(hint_lines) - 20 * len(hint_lines) - 10
         for line in hint_lines:
@@ -190,7 +221,6 @@ def render_combat(screen, wState, pState):
             screen.blit(ht, (w // 2 - ht.get_width() // 2, hint_y))
             hint_y += font.get_height() + 20
 
-    pygame.display.flip()
 
 
 def render_post_room(screen, wState, pState):
@@ -202,7 +232,7 @@ def render_post_room(screen, wState, pState):
     cx = w // 2
 
     room_txt = small.render(
-        f"Room {wState.adventure_room + 1} / 10  —  "
+        f"Room {wState.adventure_room + 1} / {gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]['total_rooms']}  —  "
         f"{gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]['name']}",
         True, (180, 180, 180))
     screen.blit(room_txt, (cx - room_txt.get_width() // 2, 12))
@@ -224,7 +254,74 @@ def render_post_room(screen, wState, pState):
         screen.blit(ht, (cx - ht.get_width() // 2, hint_y))
         hint_y += font.get_height() + 20
 
-    pygame.display.flip()
+
+
+def render_campfire_prompt(screen, wState, pState):
+    w, h = screen.get_size()
+    font, small = _fonts(h)
+    loc_image = gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]["image"]
+    _bg(screen, loc_image)
+    _overlay(screen, 190)
+    cx = w // 2
+    cy = h // 3
+
+    has_food = pState.food > 0
+    heal_amt  = wState.campfire_pending_heal
+
+    title = font.render("You find a warm campfire.", True, (255, 220, 140))
+    screen.blit(title, (cx - title.get_width() // 2, cy))
+    cy += font.get_height() + 20
+
+    if has_food:
+        sub = font.render(f"Build a fire and rest?  (costs 1 food, restores {heal_amt} HP)", True, (220, 220, 220))
+        screen.blit(sub, (cx - sub.get_width() // 2, cy))
+        cy += font.get_height() + 8
+        food_t = small.render(f"Food: {pState.food}   HP: {pState.health}/{pState.get_max_health()}", True, (160, 200, 160))
+        screen.blit(food_t, (cx - food_t.get_width() // 2, cy))
+        cy += font.get_height() + 30
+        hint = font.render("[ Enter: Rest ]   [ ESC: Move On ]", True, (200, 220, 255))
+    else:
+        sub = font.render("You have no food to cook. The cold fire offers no comfort.", True, (180, 180, 180))
+        screen.blit(sub, (cx - sub.get_width() // 2, cy))
+        cy += font.get_height() + 30
+        hint = font.render("[ Enter / ESC: Move On ]", True, (200, 220, 255))
+
+    screen.blit(hint, (cx - hint.get_width() // 2, cy))
+
+
+def render_boss_warning(screen, wState, pState):
+    w, h = screen.get_size()
+    font, small = _fonts(h)
+    loc = gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]
+    _bg(screen, loc["image"])
+    _overlay(screen, 200)
+    cx = w // 2
+    cy = h // 4
+
+    hdr = font.render("A powerful presence stirs ahead...", True, (220, 80, 80))
+    screen.blit(hdr, (cx - hdr.get_width() // 2, cy))
+    cy += font.get_height() + 20
+
+    boss_name = ("Hill Giant" if loc["boss_index"] == 0 else "Dark Wizard")
+    desc = font.render(f"The boss of {loc['name']} awaits: {boss_name}.", True, (220, 180, 100))
+    screen.blit(desc, (cx - desc.get_width() // 2, cy))
+    cy += font.get_height() + 30
+
+    for line, color in [
+        (f"HP:      {pState.health} / {pState.get_max_health()}", (220, 80, 80)),
+        (f"Attack:  {pState.get_attack()}", (220, 220, 220)),
+        (f"Defense: {pState.get_defense()}", (220, 220, 220)),
+    ]:
+        t = small.render(line, True, color)
+        screen.blit(t, (cx - t.get_width() // 2, cy))
+        cy += small.get_height() + 8
+
+    cy += 20
+    enter_t = font.render("[ Enter: Face the Boss ]", True, (220, 80, 80))
+    screen.blit(enter_t, (cx - enter_t.get_width() // 2, cy))
+    cy += font.get_height() + 12
+    esc_t = font.render("[ ESC: Retreat to Village ]", True, (130, 200, 130))
+    screen.blit(esc_t, (cx - esc_t.get_width() // 2, cy))
 
 
 def render_adventure_trade(screen, wState, pState):
@@ -254,4 +351,30 @@ def render_adventure_trade(screen, wState, pState):
             hint_color, hint_text = (200, 100, 100), "Cannot afford.   ESC: Decline"
         hint = small.render(hint_text, True, hint_color)
         screen.blit(hint, (cx - hint.get_width() // 2, cy))
-    pygame.display.flip()
+
+
+def render_trapped_chest(screen, wState, pState):
+    w, h = screen.get_size()
+    font, small = _fonts(h)
+    loc_image = gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]["image"]
+    _bg(screen, loc_image)
+    _overlay(screen, 180)
+    cx = w // 2
+    cy = h // 3
+
+    hdr = font.render("You spot a suspicious chest...", True, (255, 215, 50))
+    screen.blit(hdr, (cx - hdr.get_width() // 2, cy))
+    cy += font.get_height() + 20
+
+    for line in ["It looks rigged. Could be loot, a trap, or both. Hard to say.",
+                 f"Your HP: {pState.health} / {pState.get_max_health()}"]:
+        t = small.render(line, True, (200, 200, 200))
+        screen.blit(t, (cx - t.get_width() // 2, cy))
+        cy += small.get_height() + 8
+
+    cy += 16
+    enter_t = font.render("[ Enter: Open it ]", True, (220, 120, 80))
+    screen.blit(enter_t, (cx - enter_t.get_width() // 2, cy))
+    cy += font.get_height() + 12
+    esc_t = font.render("[ ESC: Walk away ]", True, (130, 200, 130))
+    screen.blit(esc_t, (cx - esc_t.get_width() // 2, cy))
