@@ -85,8 +85,7 @@ logic/              - Input handling and game logic
 render/             - Display dispatcher, adventure, village
 saves/              - Save game data
 scripts/            - Additional testing
-state/              - Game state, player, save/load
- screens
+state/              - Game state, player, save/load screens
 tests/              - Pytest test suite
 questforrest.py     - Entry point and main loop
 
