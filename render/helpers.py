@@ -35,6 +35,41 @@ def _load_image(path):
     return _image_cache[path]
 
 
+# ── Portrait loader (cached, safe — returns None if file missing) ─────────────
+
+_portrait_cache: dict = {}
+
+def load_portrait(path: str, target_h: int):
+    '''Load and scale a portrait to target_h, maintaining aspect ratio.
+    Cached by (path, target_h). Returns None if file is missing or fails.'''
+    key = (path, target_h)
+    if key in _portrait_cache:
+        return _portrait_cache[key]
+    if not os.path.exists(path):
+        _portrait_cache[key] = None
+        return None
+    try:
+        raw    = pygame.image.load(path).convert_alpha()
+        ow, oh = raw.get_size()
+        surf   = pygame.transform.smoothscale(raw, (int(ow * target_h / oh), target_h))
+        _portrait_cache[key] = surf
+    except Exception:
+        _portrait_cache[key] = None
+    return _portrait_cache[key]
+
+
+# Filename overrides: monster name → image filename stem (no extension)
+_MONSTER_IMG_NAMES = {
+    "Plague Rat": "Plague Rats",
+}
+
+def load_monster_portrait(monster_name: str, target_h: int):
+    '''Load a monster portrait from assets/images/. Handles name mismatches.'''
+    stem = _MONSTER_IMG_NAMES.get(monster_name, monster_name)
+    path = os.path.join("assets", "images", stem + ".jpeg")
+    return load_portrait(path, target_h)
+
+
 def _bg(screen, image_path):
     w, h = screen.get_size()
     screen.blit(pygame.transform.scale(_load_image(image_path), (w, h)), (0, 0))

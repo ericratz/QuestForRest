@@ -21,15 +21,32 @@ _MUSIC_DIR = os.path.join(os.path.dirname(os.path.dirname(
                  os.path.abspath(__file__))), "assets", "music")
 
 _RPG_MUSIC = os.path.join(_MUSIC_DIR, "Monster RPG 2 OGG Music - Revised")
+_LOOPS_DIR = os.path.join(_MUSIC_DIR, "loops_and_intros")
+_INTROS    = os.path.join(_LOOPS_DIR, "Intros")
 
 # ── Music file map ────────────────────────────────────────────────────────────
 _MUSIC_MAP = {
-    "village":      os.path.join(_MUSIC_DIR, "SNES RPG overworld loop II.wav"),
-    "dark_forest":  os.path.join(_MUSIC_DIR, "ThroughFire.ogg"),
-    "deep_caverns": os.path.join(_RPG_MUSIC, "underground.ogg"),
-    "battle":       os.path.join(_RPG_MUSIC, "battle.ogg"),
-    "boss":         os.path.join(_MUSIC_DIR, "cynicbattleloop.ogg"),
+    # ── Town / hub ─────────────────────────────────────────────────────────────
+    "village":          os.path.join(_MUSIC_DIR, "SNES RPG overworld loop II.wav"),
+    "inn":              os.path.join(_MUSIC_DIR, "a_small_fire_will_do.wav"),
+    "duskwall":         os.path.join(_MUSIC_DIR, "Medieval fair loop.ogg"),
+    # ── Restholm dungeons ──────────────────────────────────────────────────────
+    "dark_forest":      os.path.join(_MUSIC_DIR, "ThroughFire.ogg"),
+    "deep_caverns":     os.path.join(_RPG_MUSIC, "underground.ogg"),
+    # ── Combat ─────────────────────────────────────────────────────────────────
+    "battle":           os.path.join(_RPG_MUSIC, "battle.ogg"),
+    "dusk_battle":      os.path.join(_LOOPS_DIR, "Grizzly Dwarf Battle LOOP.wav"),
+    "boss":             os.path.join(_MUSIC_DIR, "cynicbattleloop.ogg"),
+    "victory":          os.path.join(_LOOPS_DIR, "Grizzly Dwarf Battle Victory LOOP.wav"),
+    # ── Duskwall dungeons ──────────────────────────────────────────────────────
+    "outer_ruins":      os.path.join(_RPG_MUSIC, "fortress.ogg"),
+    "abandoned_castle": os.path.join(_RPG_MUSIC, "castle.ogg"),
+    # Available but unassigned (add to map when a fitting area exists):
+    #   ThroughSea.ogg               — sea / coastal area
+    #   Glizzy Elf Forest LOOP.wav   — peaceful forest variant
 }
+
+
 
 _RPG  = os.path.join(_SFX_DIR, "kenney_rpg-audio", "Audio")
 _UI   = os.path.join(_SFX_DIR, "kenney_ui-audio",  "Audio")
@@ -91,10 +108,11 @@ def play(name: str, volume: float = 1.0):
 
 def play_exclusive(name: str, volume: float = 1.0):
     '''Stop all regular SFX and play this sound on the priority channel.
-    Use for important one-shot sounds (level-up) that must not be buried.'''
+    Clears the pending-sound queue so no delayed sound can follow and mask this one.'''
     s = _sounds.get(name)
     if s and _priority_channel:
-        pygame.mixer.stop()   # stop all non-priority channels
+        _pending.clear()          # cancel any in-flight delayed sounds (e.g. hit_player)
+        pygame.mixer.stop()       # stop all non-priority channels
         s.set_volume(max(0.0, min(1.0, volume * _sfx_volume)))
         _priority_channel.play(s)
 

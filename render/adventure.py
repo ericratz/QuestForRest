@@ -6,7 +6,8 @@ Renders for adventure mode: location select, combat, post-room, wanderer trade
 import pygame
 import state.gamestate as gamestate
 import data.quests as quests_data
-from .helpers import _bg, _overlay, _fonts, _draw_hp_bar
+import data.monsters as monsters_data
+from .helpers import _bg, _overlay, _fonts, _draw_hp_bar, load_portrait, load_monster_portrait
 
 
 def render_adventure_select(screen, wState, pState, area):
@@ -17,39 +18,62 @@ def render_adventure_select(screen, wState, pState, area):
     cx = w // 2
     y  = int(h * 0.20)
 
-    hdr = font.render("Choose Adventure", True, (255, 255, 255))
+    is_duskwall = (wState.adventure_select_context == "duskwall")
+
+    hdr_text = "Duskwall Adventures" if is_duskwall else "Choose Adventure"
+    hdr = font.render(hdr_text, True, (255, 255, 255))
     screen.blit(hdr, (cx - hdr.get_width() // 2, y))
     y += font.get_height() + 24
 
-    for i, loc in enumerate(gamestate.ADVENTURE_LOCATIONS):
-        unlocked = i < wState.adventure_locations_unlocked
-        done     = i in wState.adventure_locations_complete
-        selected = (i == wState.adventure_select_index)
+    if is_duskwall:
+        offset     = 2   # Duskwall dungeons start at index 2 in ADVENTURE_LOCATIONS
+        max_shown  = wState.duskwall_locations_unlocked
+        locs       = gamestate.ADVENTURE_LOCATIONS[offset:offset + 2]
+    else:
+        offset     = 0
+        max_shown  = wState.adventure_locations_unlocked
+        locs       = gamestate.ADVENTURE_LOCATIONS[:2]
+
+    for rel_i, loc in enumerate(locs):
+        abs_i    = offset + rel_i
+        unlocked = rel_i < max_shown
+        done     = abs_i in wState.adventure_locations_complete
+        selected = (rel_i == wState.adventure_select_index)
 
         if not unlocked:
             color = (60, 60, 60)
             label = f"  {loc['name']}  [Locked]"
         elif done:
-            color  = (255, 255, 0) if selected else (160, 200, 160)
-            label  = ("> " if selected else "  ") + loc["name"] + "  [Complete]"
+            color = (255, 255, 0) if selected else (160, 200, 160)
+            label = ("> " if selected else "  ") + loc["name"] + "  [Complete]"
         else:
-            color  = (255, 255, 0) if selected else (220, 220, 220)
-            label  = ("> " if selected else "  ") + loc["name"]
+            color = (255, 255, 0) if selected else (220, 220, 220)
+            label = ("> " if selected else "  ") + loc["name"]
 
         screen.blit(font.render(label, True, color), (cx - 200, y))
         y += font.get_height() + 8
 
     y += 12
-    sel_loc = gamestate.ADVENTURE_LOCATIONS[wState.adventure_select_index]
-    desc = small.render(sel_loc["desc"], True, (170, 170, 170))
-    screen.blit(desc, (cx - desc.get_width() // 2, y))
-    y += small.get_height() + 8
-    n_rooms   = gamestate.ADVENTURE_LOCATIONS[wState.adventure_select_index]["total_rooms"]
-    room_info = small.render(f"{n_rooms} rooms  |  Final room: Boss battle", True, (120, 120, 120))
-    screen.blit(room_info, (cx - room_info.get_width() // 2, y))
-    y += small.get_height() + 18
+    rel_sel  = wState.adventure_select_index
+    abs_sel  = offset + rel_sel
+    sel_locs = gamestate.ADVENTURE_LOCATIONS[offset:offset + 2]
+    if rel_sel < len(sel_locs):
+        sel_loc  = sel_locs[rel_sel]
+        desc = small.render(sel_loc["desc"], True, (170, 170, 170))
+        screen.blit(desc, (cx - desc.get_width() // 2, y))
+        y += small.get_height() + 8
+        n_rooms   = sel_loc["total_rooms"]
+        room_info = small.render(f"{n_rooms} rooms  |  Final room: Boss battle", True, (120, 120, 120))
+        screen.blit(room_info, (cx - room_info.get_width() // 2, y))
+        y += small.get_height() + 18
 
-    food_req_n = 3 if wState.adventure_select_index >= 1 else 1
+    rel_idx = wState.adventure_select_index
+    if is_duskwall:
+        food_req_n = 5 if rel_idx >= 1 else 4
+    elif rel_idx >= 1:
+        food_req_n = 3
+    else:
+        food_req_n = 1
     food_color = (220, 80, 80) if pState.food < food_req_n else (160, 200, 140)
     food_req = small.render(f"Requires {food_req_n} Food  (You have: {pState.food})", True, food_color)
     screen.blit(food_req, (cx - food_req.get_width() // 2, y))
@@ -74,14 +98,26 @@ def render_combat(screen, wState, pState):
     monster = wState.combat_monster
 
     room_txt = small.render(
-        f"Room {wState.adventure_room + 1} / {gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]['total_rooms']}  —  "
+        f"Room {wState.adventure_room + 1} / {gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]['total_rooms']}  -  "
         f"{gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]['name']}",
         True, (180, 180, 180))
     screen.blit(room_txt, (w // 2 - room_txt.get_width() // 2, 12))
 
     if not wState.post_combat_mode and monster:
-        # Monster panel (left)
         panel_top = 50
+
+        # Monster portrait — centered between the two stat panels
+        m_portrait = load_monster_portrait(monster.name, int(h * 0.30))
+        if m_portrait:
+            mp_x = w // 2 - m_portrait.get_width() // 2
+            mp_y = panel_top
+            pygame.draw.rect(screen, (8, 8, 16),
+                             (mp_x - 3, mp_y - 3, m_portrait.get_width() + 6, m_portrait.get_height() + 6))
+            pygame.draw.rect(screen, (100, 80, 60),
+                             (mp_x - 3, mp_y - 3, m_portrait.get_width() + 6, m_portrait.get_height() + 6), 2)
+            screen.blit(m_portrait, (mp_x, mp_y))
+
+        # Monster panel (left) — always at panel_top, independent of portrait
         m_name = font.render(monster.name, True, (230, 100, 100))
         screen.blit(m_name, (60, panel_top))
         _draw_hp_bar(screen, 60, panel_top + font.get_height() + 6,
@@ -117,7 +153,7 @@ def render_combat(screen, wState, pState):
         }
         for eff, turns in pState.status_effects.items():
             color   = effect_colors.get(eff, (180, 180, 180))
-            dur_str = "∞" if turns == -1 else str(turns)
+            dur_str = "~" if turns == -1 else str(turns)
             t = small.render(f"{eff.capitalize()} ({dur_str})", True, color)
             screen.blit(t, (px, stat_y))
             stat_y += small.get_height() + 4
@@ -148,13 +184,45 @@ def render_combat(screen, wState, pState):
                              (ox, oy, opt_w, opt_row_h), 1)
 
             dim = ((action == "Flee" and pState.food <= 0) or
-                   (action == "Use Potion" and not any(
-                       it.consumable and ("heal" in it.use_effect or "flee" in it.use_effect)
-                       for it in pState.inventory)))
+                   (action == "Use Item" and not any(it.consumable for it in pState.inventory)) or
+                   (action == "Examine" and wState.combat_examined))
             label_color = ((255, 255, 255) if sel and not dim else
                            (100, 100, 100) if dim else (150, 150, 160))
             t = font.render(action, True, label_color)
             screen.blit(t, (ox + opt_w // 2 - t.get_width() // 2, oy + text_pad))
+
+        # Combat item selection overlay
+        if wState.combat_item_mode:
+            _overlay(screen, 180)
+            consumables = [it for it in pState.inventory if it.consumable]
+            panel_w = int(w * 0.55)
+            panel_h = font.get_height() + 20 + (font.get_height() + 8) * max(1, len(consumables)) + 30
+            px = w // 2 - panel_w // 2
+            py = h // 2 - panel_h // 2
+            pygame.draw.rect(screen, (20, 20, 35), (px, py, panel_w, panel_h))
+            pygame.draw.rect(screen, (80, 80, 120), (px, py, panel_w, panel_h), 2)
+            hdr = font.render("Use which item?", True, (255, 255, 255))
+            screen.blit(hdr, (w // 2 - hdr.get_width() // 2, py + 10))
+            iy = py + font.get_height() + 20
+            if not consumables:
+                screen.blit(font.render("No items.", True, (120, 120, 120)), (px + 16, iy))
+            else:
+                from render.village import _consumable_desc
+                for idx, it in enumerate(consumables):
+                    sel_i = (idx == wState.combat_item_index)
+                    row_bg = pygame.Surface((panel_w - 4, font.get_height() + 6), pygame.SRCALPHA)
+                    row_bg.fill((80, 80, 30, 200) if sel_i else (0, 0, 0, 0))
+                    screen.blit(row_bg, (px + 2, iy - 2))
+                    prefix = "> " if sel_i else "  "
+                    desc = _consumable_desc(it.use_effect)
+                    label = f"{prefix}{it.name}"
+                    if desc:
+                        label += f"  ({desc})"
+                    col_i = (255, 255, 0) if sel_i else (210, 210, 210)
+                    screen.blit(font.render(label, True, col_i), (px + 16, iy))
+                    iy += font.get_height() + 8
+            hint_i = small.render("Up/Down: Navigate   Enter: Use   ESC: Cancel", True, (100, 100, 100))
+            screen.blit(hint_i, (w // 2 - hint_i.get_width() // 2, py + panel_h - small.get_height() - 6))
 
     # Post-combat overlay
     if wState.post_combat_mode:
@@ -173,7 +241,9 @@ def render_combat(screen, wState, pState):
             else:
                 lines += [f"{monster.name if monster else 'Enemy'} defeated!", ""]
             if gold:
-                lines.append(f"+ {gold} gold")
+                _dusk_locs = {2, 3}  # Outer Ruins, Abandoned Castle
+                _loot_currency = "marks" if wState.adventure_loc_index in _dusk_locs else "gold"
+                lines.append(f"+ {gold} {_loot_currency}")
             if item_str:
                 lines.append(f"+ {item_str}")
             for lvl, hp_gain, atk_gain, def_gain in wState.post_combat_levelups:
@@ -232,7 +302,7 @@ def render_post_room(screen, wState, pState):
     cx = w // 2
 
     room_txt = small.render(
-        f"Room {wState.adventure_room + 1} / {gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]['total_rooms']}  —  "
+        f"Room {wState.adventure_room + 1} / {gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]['total_rooms']}  -  "
         f"{gamestate.ADVENTURE_LOCATIONS[wState.adventure_loc_index]['name']}",
         True, (180, 180, 180))
     screen.blit(room_txt, (cx - room_txt.get_width() // 2, 12))
@@ -296,30 +366,58 @@ def render_boss_warning(screen, wState, pState):
     _bg(screen, loc["image"])
     _overlay(screen, 200)
     cx = w // 2
-    cy = h // 4
+    cy = h // 8
 
     hdr = font.render("A powerful presence stirs ahead...", True, (220, 80, 80))
     screen.blit(hdr, (cx - hdr.get_width() // 2, cy))
-    cy += font.get_height() + 20
+    cy += font.get_height() + 14
 
-    boss_name = ("Hill Giant" if loc["boss_index"] == 0 else "Dark Wizard")
-    desc = font.render(f"The boss of {loc['name']} awaits: {boss_name}.", True, (220, 180, 100))
-    screen.blit(desc, (cx - desc.get_width() // 2, cy))
-    cy += font.get_height() + 30
+    pool = monsters_data.DUSKWALL_BOSS_POOL if loc.get("duskwall") else monsters_data.BOSS_POOL
+    boss = pool[loc["boss_index"] % len(pool)]
+
+    name_t = font.render(f"{boss.name}  -  boss of {loc['name']}", True, (220, 180, 100))
+    screen.blit(name_t, (cx - name_t.get_width() // 2, cy))
+    cy += font.get_height() + 10
+
+    # Boss description flavour text
+    if boss.description:
+        desc_t = small.render(boss.description, True, (180, 160, 130))
+        screen.blit(desc_t, (cx - desc_t.get_width() // 2, cy))
+        cy += small.get_height() + 18
+
+    # Boss stats
+    divider = small.render("- Boss -", True, (160, 80, 80))
+    screen.blit(divider, (cx - divider.get_width() // 2, cy))
+    cy += small.get_height() + 6
 
     for line, color in [
-        (f"HP:      {pState.health} / {pState.get_max_health()}", (220, 80, 80)),
+        (f"HP:      {boss.max_hp}", (220, 80, 80)),
+        (f"Attack:  {boss.attack}", (200, 160, 160)),
+        (f"Defense: {boss.defense}", (200, 160, 160)),
+    ]:
+        t = small.render(line, True, color)
+        screen.blit(t, (cx - t.get_width() // 2, cy))
+        cy += small.get_height() + 6
+
+    cy += 10
+    # Player stats
+    divider2 = small.render("- You -", True, (80, 120, 180))
+    screen.blit(divider2, (cx - divider2.get_width() // 2, cy))
+    cy += small.get_height() + 6
+
+    for line, color in [
+        (f"HP:      {pState.health} / {pState.get_max_health()}", (100, 180, 220)),
         (f"Attack:  {pState.get_attack()}", (220, 220, 220)),
         (f"Defense: {pState.get_defense()}", (220, 220, 220)),
     ]:
         t = small.render(line, True, color)
         screen.blit(t, (cx - t.get_width() // 2, cy))
-        cy += small.get_height() + 8
+        cy += small.get_height() + 6
 
-    cy += 20
+    cy += 18
     enter_t = font.render("[ Enter: Face the Boss ]", True, (220, 80, 80))
     screen.blit(enter_t, (cx - enter_t.get_width() // 2, cy))
-    cy += font.get_height() + 12
+    cy += font.get_height() + 10
     esc_t = font.render("[ ESC: Retreat to Village ]", True, (130, 200, 130))
     screen.blit(esc_t, (cx - esc_t.get_width() // 2, cy))
 
@@ -333,19 +431,30 @@ def render_adventure_trade(screen, wState, pState):
     cx = w // 2
     cy = h // 3
 
+    # Wanderer portrait — left side
+    wan = load_portrait("assets/images/Wanderer.jpeg", int(h * 0.45))
+    if wan:
+        wx = int(w * 0.08)
+        wy = int(h * 0.25)
+        screen.blit(wan, (wx, wy))
+
     hdr = font.render("A trading wanderer approaches!", True, (255, 255, 255))
     screen.blit(hdr, (cx - hdr.get_width() // 2, cy))
     cy += font.get_height() + 20
 
     item = wState.adventure_trade_item
     if item:
-        offer = font.render(f"He offers: {item.name}  for  {item.price}g", True, (255, 215, 50))
+        _is_dusk  = wState.adventure_trade_dusk
+        _currency = "marks" if _is_dusk else "g"
+        _wallet   = pState.marks if _is_dusk else pState.gold
+        offer = font.render(f"He offers: {item.name}  for  {item.price}{_currency}", True, (255, 215, 50))
         screen.blit(offer, (cx - offer.get_width() // 2, cy))
         cy += font.get_height() + 10
-        gold_t = small.render(f"Your gold: {pState.gold}g", True, (180, 180, 180))
-        screen.blit(gold_t, (cx - gold_t.get_width() // 2, cy))
+        wallet_label = "marks" if _is_dusk else "gold"
+        wallet_t = small.render(f"Your {wallet_label}: {_wallet}{'' if _is_dusk else 'g'}", True, (180, 180, 180))
+        screen.blit(wallet_t, (cx - wallet_t.get_width() // 2, cy))
         cy += small.get_height() + 20
-        if pState.gold >= item.price:
+        if _wallet >= item.price:
             hint_color, hint_text = (130, 200, 130), "Enter: Buy   ESC: Decline"
         else:
             hint_color, hint_text = (200, 100, 100), "Cannot afford.   ESC: Decline"
